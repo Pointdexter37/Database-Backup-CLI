@@ -9,6 +9,7 @@ import (
 
 	"dbbackup/internal/db"
 	"dbbackup/internal/processor"
+	"dbbackup/internal/scheduler"
 	"dbbackup/internal/storage"
 
 	"github.com/spf13/cobra"
@@ -28,6 +29,74 @@ var (
 	s3Region   string
 )
 
+func RunBackup(ctx context.Context, job *scheduler.JobConfig) error {
+	config := db.Config{
+		Host:     job.DBHost,
+		Port:     job.DBPort,
+		User:     job.DBUser,
+		Password: job.DBPassword,
+		Database: job.DBName,
+	}
+
+	var database db.Database
+	switch job.DBType {
+	case "postgres":
+		database = db.NewPostgresDB()
+	default:
+		return fmt.Errorf("unsupported database type: %s", job.DBType)
+	}
+
+	// Configure storage provider
+	var store storage.Storage
+	switch job.Storage {
+	case "local":
+		store = storage.NewLocalStorage(".")
+	case "s3":
+		var err error
+		store, err = storage.NewS3Storage(ctx, job.S3Bucket, job.S3Region)
+		if err != nil {
+			return fmt.Errorf("error initializing S3 storage: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported storage destination: %s", job.Storage)
+	}
+
+	// Adjust output path if compression is enabled and missing .gz extension
+	finalOutputPath := job.OutputPath
+	if job.Compress && !strings.HasSuffix(finalOutputPath, ".gz") {
+		finalOutputPath += ".gz"
+	}
+
+	// Set up pipeline using io.Pipe
+	pr, pw := io.Pipe()
+
+	// Run backup generation in a separate goroutine
+	go func() {
+		var err error
+		var outWriter io.WriteCloser = pw
+
+		if job.Compress {
+			gzipProc := processor.NewGzipProcessor(pw)
+			outWriter = gzipProc
+		}
+
+		err = database.Backup(ctx, config, outWriter)
+		
+		if job.Compress {
+			outWriter.Close()
+		}
+		pw.CloseWithError(err)
+	}()
+
+	// The main thread reads from the pipe and saves to the storage
+	err := store.Save(ctx, pr, finalOutputPath)
+	if err != nil {
+		return fmt.Errorf("backup failed during save: %w", err)
+	}
+
+	return nil
+}
+
 var backupCmd = &cobra.Command{
 	Use:   "backup",
 	Short: "Backup a specific database",
@@ -35,76 +104,27 @@ var backupCmd = &cobra.Command{
 		ctx := context.Background()
 		fmt.Printf("Starting backup for DB Type: %s, Name: %s\n", dbType, dbName)
 
-		config := db.Config{
-			Host:     dbHost,
-			Port:     dbPort,
-			User:     dbUser,
-			Password: dbPassword,
-			Database: dbName,
+		job := &scheduler.JobConfig{
+			DBType:     dbType,
+			DBName:     dbName,
+			DBHost:     dbHost,
+			DBPort:     dbPort,
+			DBUser:     dbUser,
+			DBPassword: dbPassword,
+			Storage:    storageDst,
+			OutputPath: outputPath,
+			S3Bucket:   s3Bucket,
+			S3Region:   s3Region,
+			Compress:   compress,
 		}
 
-		var database db.Database
-		switch dbType {
-		case "postgres":
-			database = db.NewPostgresDB()
-		default:
-			fmt.Printf("Error: Unsupported database type: %s\n", dbType)
-			os.Exit(1)
-		}
-
-		// Configure storage provider
-		var store storage.Storage
-		switch storageDst {
-		case "local":
-			store = storage.NewLocalStorage(".")
-		case "s3":
-			var err error
-			store, err = storage.NewS3Storage(ctx, s3Bucket, s3Region)
-			if err != nil {
-				fmt.Printf("Error initializing S3 storage: %v\n", err)
-				os.Exit(1)
-			}
-		default:
-			fmt.Printf("Error: Unsupported storage destination: %s\n", storageDst)
-			os.Exit(1)
-		}
-
-		// Adjust output path if compression is enabled and missing .gz extension
-		finalOutputPath := outputPath
-		if compress && !strings.HasSuffix(finalOutputPath, ".gz") {
-			finalOutputPath += ".gz"
-		}
-
-		// Set up pipeline using io.Pipe
-		pr, pw := io.Pipe()
-
-		// Run backup generation in a separate goroutine
-		go func() {
-			var err error
-			var outWriter io.WriteCloser = pw
-
-			if compress {
-				gzipProc := processor.NewGzipProcessor(pw)
-				outWriter = gzipProc
-			}
-
-			err = database.Backup(ctx, config, outWriter)
-			
-			// Close writers in correct order
-			if compress {
-				outWriter.Close()
-			}
-			pw.CloseWithError(err)
-		}()
-
-		// The main thread reads from the pipe and saves to the storage
-		err := store.Save(ctx, pr, finalOutputPath)
+		err := RunBackup(ctx, job)
 		if err != nil {
-			fmt.Printf("Backup failed during save: %v\n", err)
+			fmt.Printf("Backup error: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("Backup completed successfully! Saved to [%s]: %s\n", storageDst, finalOutputPath)
+		fmt.Printf("Backup completed successfully! Saved to [%s]\n", storageDst)
 	},
 }
 
