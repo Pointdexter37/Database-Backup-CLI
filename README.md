@@ -12,6 +12,14 @@ A robust, streaming command-line utility for database backups. This tool allows 
 * **Background Scheduling**: A built-in daemon that runs recurring backups based on standard Cron expressions.
 * **Structured Logging**: Uses standard `log/slog` for structured JSON logging, ideal for production monitoring.
 
+## Tech Stack
+
+* **Language**: Go (Golang) 1.25.1
+* **CLI Framework**: Cobra (`github.com/spf13/cobra`)
+* **Cloud SDK**: AWS SDK for Go V2 (`github.com/aws/aws-sdk-go-v2`)
+* **Scheduling**: Robfig Cron v3 (`github.com/robfig/cron/v3`)
+* **Logging**: Standard library `log/slog`
+
 ## System Architecture
 
 ```mermaid
@@ -119,6 +127,36 @@ To execute the scheduled backups, you must run the background daemon. The daemon
 ```
 
 All daemon activities and execution results are logged in JSON format to `backup_daemon.log` in the current working directory.
+
+## Local Testing Guide
+
+To test the application locally without affecting production databases, you can use Docker to spin up a temporary PostgreSQL instance.
+
+### 1. Start a Test Database
+```bash
+docker run --name pg-test -e POSTGRES_PASSWORD=secret -e POSTGRES_USER=admin -e POSTGRES_DB=my_database -p 5432:5432 -d postgres:latest
+```
+
+### 2. Add Dummy Data
+```bash
+docker exec -it pg-test psql -U admin -d my_database -c "CREATE TABLE test_users (id serial PRIMARY KEY, name VARCHAR(50)); INSERT INTO test_users (name) VALUES ('Alice'), ('Bob');"
+```
+
+### 3. Run a Local Backup
+```bash
+mkdir backups
+go run main.go backup --db postgres --name my_database --host localhost --port 5432 --user admin --password secret --output ./backups/my_database.sql --storage local
+```
+
+### 4. Verify Output
+Check the `backups` directory to confirm the compressed `my_database.sql.gz` file was created successfully.
+
+### 5. Cleanup
+When you are done testing, stop and remove the temporary container:
+```bash
+docker stop pg-test
+docker rm pg-test
+```
 
 ## Requirements
 
