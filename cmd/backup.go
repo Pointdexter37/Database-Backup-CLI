@@ -3,9 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"dbbackup/internal/db"
+	"dbbackup/internal/processor"
 
 	"github.com/spf13/cobra"
 )
@@ -18,6 +21,7 @@ var (
 	dbUser     string
 	dbPassword string
 	outputPath string
+	compress   bool
 )
 
 var backupCmd = &cobra.Command{
@@ -43,13 +47,35 @@ var backupCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		err := database.Backup(context.Background(), config, outputPath)
+		// Adjust output path if compression is enabled and missing .gz extension
+		finalOutputPath := outputPath
+		if compress && !strings.HasSuffix(finalOutputPath, ".gz") {
+			finalOutputPath += ".gz"
+		}
+
+		// Open output file
+		file, err := os.Create(finalOutputPath)
+		if err != nil {
+			fmt.Printf("Failed to create output file: %v\n", err)
+			os.Exit(1)
+		}
+		defer file.Close()
+
+		// Set up pipeline
+		var outWriter io.Writer = file
+		if compress {
+			gzipProc := processor.NewGzipProcessor(file)
+			defer gzipProc.Close()
+			outWriter = gzipProc
+		}
+
+		err = database.Backup(context.Background(), config, outWriter)
 		if err != nil {
 			fmt.Printf("Backup failed: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("Backup completed successfully! Saved to: %s\n", outputPath)
+		fmt.Printf("Backup completed successfully! Saved to: %s\n", finalOutputPath)
 	},
 }
 
@@ -62,10 +88,12 @@ func init() {
 	backupCmd.Flags().StringVar(&dbUser, "user", "", "Database user")
 	backupCmd.Flags().StringVar(&dbPassword, "password", "", "Database password")
 	backupCmd.Flags().StringVarP(&outputPath, "output", "o", "backup.sql", "Output path for the backup file")
+	backupCmd.Flags().BoolVarP(&compress, "compress", "c", true, "Enable gzip compression")
 
 	// Mark flags as required
 	backupCmd.MarkFlagRequired("db")
 	backupCmd.MarkFlagRequired("name")
 
 	rootCmd.AddCommand(backupCmd)
-}
+}
+
