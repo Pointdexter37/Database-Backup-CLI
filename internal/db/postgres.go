@@ -18,21 +18,37 @@ func NewPostgresDB() *PostgresDB {
 
 // Backup executes pg_dump to backup a PostgreSQL database
 func (p *PostgresDB) Backup(ctx context.Context, config Config, out io.Writer) error {
-	args := []string{
+	var baseCmd string
+	var args []string
+
+	if config.DockerContainer != "" {
+		baseCmd = "docker"
+		args = []string{"exec", "-i"}
+		if config.Password != "" {
+			args = append(args, "-e", fmt.Sprintf("PGPASSWORD=%s", config.Password))
+		}
+		args = append(args, config.DockerContainer, "pg_dump")
+	} else {
+		baseCmd = "pg_dump"
+	}
+
+	pgArgs := []string{
 		"-h", config.Host,
 		"-U", config.User,
 		"-d", config.Database,
 	}
 
 	if config.Port > 0 {
-		args = append(args, "-p", fmt.Sprintf("%d", config.Port))
+		pgArgs = append(pgArgs, "-p", fmt.Sprintf("%d", config.Port))
 	}
 
-	cmd := exec.CommandContext(ctx, "pg_dump", args...)
+	args = append(args, pgArgs...)
+
+	cmd := exec.CommandContext(ctx, baseCmd, args...)
 	cmd.Stdout = out
 
-	// Pass the password via the PGPASSWORD environment variable
-	if config.Password != "" {
+	// Pass the password via the PGPASSWORD environment variable if not using docker
+	if config.DockerContainer == "" && config.Password != "" {
 		cmd.Env = append(os.Environ(), fmt.Sprintf("PGPASSWORD=%s", config.Password))
 	}
 

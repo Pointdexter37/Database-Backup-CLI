@@ -8,19 +8,20 @@ import (
 )
 
 type JobConfig struct {
-	ID         string `json:"id"`
-	CronExpr   string `json:"cronExpr"`
-	DBType     string `json:"dbType"`
-	DBName     string `json:"dbName"`
-	DBHost     string `json:"dbHost"`
-	DBPort     int    `json:"dbPort"`
-	DBUser     string `json:"dbUser"`
-	DBPassword string `json:"dbPassword"`
-	Storage    string `json:"storage"`
-	OutputPath string `json:"outputPath"`
-	S3Bucket   string `json:"s3Bucket"`
-	S3Region   string `json:"s3Region"`
-	Compress   bool   `json:"compress"`
+	ID              string `json:"id"`
+	CronExpr        string `json:"cronExpr"`
+	DBType          string `json:"dbType"`
+	DBName          string `json:"dbName"`
+	DBHost          string `json:"dbHost"`
+	DBPort          int    `json:"dbPort"`
+	DBUser          string `json:"dbUser"`
+	DBPassword      string `json:"dbPassword"`
+	DockerContainer string `json:"dockerContainer"`
+	Storage         string `json:"storage"`
+	OutputPath      string `json:"outputPath"`
+	S3Bucket        string `json:"s3Bucket"`
+	S3Region        string `json:"s3Region"`
+	Compress        bool   `json:"compress"`
 }
 
 type Manager struct {

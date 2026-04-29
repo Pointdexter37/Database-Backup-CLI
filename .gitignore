@@ -21,6 +21,9 @@ go.work.sum
 # Project specific
 dbbackup
 dbbackup.exe
+schedules.json
+backup_daemon.log
+backups/
 
 # OS generated files
 .DS_Store

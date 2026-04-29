@@ -26,19 +26,20 @@ var scheduleAddCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		manager := scheduler.NewManager("schedules.json")
 		job := scheduler.JobConfig{
-			ID:         fmt.Sprintf("job-%d", time.Now().UnixNano()),
-			CronExpr:   cronExpr,
-			DBType:     dbType,
-			DBName:     dbName,
-			DBHost:     dbHost,
-			DBPort:     dbPort,
-			DBUser:     dbUser,
-			DBPassword: dbPassword,
-			Storage:    storageDst,
-			OutputPath: outputPath,
-			S3Bucket:   s3Bucket,
-			S3Region:   s3Region,
-			Compress:   compress,
+			ID:              fmt.Sprintf("job-%d", time.Now().UnixNano()),
+			CronExpr:        cronExpr,
+			DBType:          dbType,
+			DBName:          dbName,
+			DBHost:          dbHost,
+			DBPort:          dbPort,
+			DBUser:          dbUser,
+			DBPassword:      dbPassword,
+			DockerContainer: dockerContainer,
+			Storage:         storageDst,
+			OutputPath:      outputPath,
+			S3Bucket:        s3Bucket,
+			S3Region:        s3Region,
+			Compress:        compress,
 		}
 
 		if err := manager.AddJob(job); err != nil {
@@ -101,6 +102,7 @@ func init() {
 	scheduleAddCmd.Flags().StringVar(&storageDst, "storage", "local", "Storage destination")
 	scheduleAddCmd.Flags().StringVar(&s3Bucket, "s3-bucket", "", "S3 bucket name")
 	scheduleAddCmd.Flags().StringVar(&s3Region, "s3-region", "", "AWS region")
+	scheduleAddCmd.Flags().StringVar(&dockerContainer, "docker-container", "", "Execute backup inside a specific docker container")
 
 	scheduleAddCmd.MarkFlagRequired("db")
 	scheduleAddCmd.MarkFlagRequired("name")

@@ -7,11 +7,12 @@ import (
 
 // Config represents the base connection details for a database
 type Config struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Database string
+	Host            string
+	Port            int
+	User            string
+	Password        string
+	Database        string
+	DockerContainer string
 }
 
 // Database represents the core operations a database dialect must support

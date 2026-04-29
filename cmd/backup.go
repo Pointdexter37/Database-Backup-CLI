@@ -16,26 +16,28 @@ import (
 )
 
 var (
-	dbType     string
-	dbName     string
-	dbHost     string
-	dbPort     int
-	dbUser     string
-	dbPassword string
-	outputPath string
-	compress   bool
-	storageDst string
-	s3Bucket   string
-	s3Region   string
+	dbType          string
+	dbName          string
+	dbHost          string
+	dbPort          int
+	dbUser          string
+	dbPassword      string
+	outputPath      string
+	compress        bool
+	storageDst      string
+	s3Bucket        string
+	s3Region        string
+	dockerContainer string
 )
 
 func RunBackup(ctx context.Context, job *scheduler.JobConfig) error {
 	config := db.Config{
-		Host:     job.DBHost,
-		Port:     job.DBPort,
-		User:     job.DBUser,
-		Password: job.DBPassword,
-		Database: job.DBName,
+		Host:            job.DBHost,
+		Port:            job.DBPort,
+		User:            job.DBUser,
+		Password:        job.DBPassword,
+		Database:        job.DBName,
+		DockerContainer: job.DockerContainer,
 	}
 
 	var database db.Database
@@ -105,17 +107,18 @@ var backupCmd = &cobra.Command{
 		fmt.Printf("Starting backup for DB Type: %s, Name: %s\n", dbType, dbName)
 
 		job := &scheduler.JobConfig{
-			DBType:     dbType,
-			DBName:     dbName,
-			DBHost:     dbHost,
-			DBPort:     dbPort,
-			DBUser:     dbUser,
-			DBPassword: dbPassword,
-			Storage:    storageDst,
-			OutputPath: outputPath,
-			S3Bucket:   s3Bucket,
-			S3Region:   s3Region,
-			Compress:   compress,
+			DBType:          dbType,
+			DBName:          dbName,
+			DBHost:          dbHost,
+			DBPort:          dbPort,
+			DBUser:          dbUser,
+			DBPassword:      dbPassword,
+			DockerContainer: dockerContainer,
+			Storage:         storageDst,
+			OutputPath:      outputPath,
+			S3Bucket:        s3Bucket,
+			S3Region:        s3Region,
+			Compress:        compress,
 		}
 
 		err := RunBackup(ctx, job)
@@ -142,6 +145,7 @@ func init() {
 	backupCmd.Flags().StringVar(&storageDst, "storage", "local", "Storage destination (local, s3)")
 	backupCmd.Flags().StringVar(&s3Bucket, "s3-bucket", "", "S3 bucket name (required if storage is s3)")
 	backupCmd.Flags().StringVar(&s3Region, "s3-region", "", "AWS region for S3")
+	backupCmd.Flags().StringVar(&dockerContainer, "docker-container", "", "Execute backup inside a specific docker container")
 
 	// Mark flags as required
 	backupCmd.MarkFlagRequired("db")
